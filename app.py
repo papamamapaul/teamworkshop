@@ -24,6 +24,15 @@ def create_app():
 app = create_app()
 socketio = SocketIO(app)
 
+# Führe Migrationen beim Start aus
+with app.app_context():
+    try:
+        from flask_migrate import upgrade
+        upgrade()
+    except Exception as e:
+        print(f"Migration error: {e}")
+        # Fahre trotz Migrationsfehler fort
+
 @app.route('/')
 def index():
     return render_template('index.html')

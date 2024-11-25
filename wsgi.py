@@ -1,9 +1,7 @@
-from app import create_app
-from flask_migrate import upgrade
-import os
+from app import create_app, socketio
 
 app = create_app()
 
-# Führe Migrationen beim Start aus
-with app.app_context():
-    upgrade()
+# Die Migrationen werden jetzt in app.py ausgeführt
+if __name__ == "__main__":
+    socketio.run(app)
