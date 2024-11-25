@@ -1,118 +1,143 @@
-import os
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_socketio import SocketIO, emit
+from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 import qrcode
-from io import BytesIO
+import io
 import base64
-from models import db, Question, Answer
-from config import config
+import uuid
+from models import db, Question, Answer, Survey, QuestionOption
 
-socketio = SocketIO()
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'geheim!'  # In Produktion durch sichere Umgebungsvariable ersetzen
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///workshop.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-def create_app():
-    app = Flask(__name__)
-    
-    # Konfiguration basierend auf Umgebung laden
-    env = os.getenv('FLASK_ENV', 'development')
-    app.config.from_object(config[env])
-    
-    # Datenbank initialisieren
-    db.init_app(app)
-    Migrate(app, db)
-    
-    # SocketIO initialisieren
-    socketio.init_app(app)
-    
-    # Führe Migrationen beim Start aus
-    with app.app_context():
-        try:
-            from flask_migrate import upgrade
-            upgrade()
-        except Exception as e:
-            print(f"Migration error: {e}")
-            # Fahre trotz Migrationsfehler fort
-    
-    return app
+db.init_app(app)
+migrate = Migrate(app, db)
+socketio = SocketIO(app)
 
-# Erstelle die App
-app = create_app()
-
+# Hauptseite
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/host')
-def host():
-    """Host view for creating questions"""
-    return render_template('host.html')
+# Umfragen-Übersicht
+@app.route('/surveys')
+def list_surveys():
+    surveys = Survey.query.all()
+    return render_template('surveys.html', surveys=surveys)
 
-@app.route('/participate')
-def participate():
-    """Participant view for answering questions"""
-    return render_template('participate.html')
+# Neue Umfrage erstellen
+@app.route('/surveys/new', methods=['GET', 'POST'])
+def new_survey():
+    if request.method == 'POST':
+        title = request.form.get('title')
+        description = request.form.get('description')
+        survey = Survey(title=title, description=description)
+        db.session.add(survey)
+        db.session.commit()
+        return redirect(url_for('view_survey', survey_uuid=survey.uuid))
+    return render_template('survey_new.html')
 
-@app.route('/generate-qr')
-def generate_qr():
-    """Generate QR code for the participation URL"""
-    url = request.host_url + "participate"
-    img = qrcode.make(url)
-    buffered = BytesIO()
-    img.save(buffered, format="PNG")
-    img_str = base64.b64encode(buffered.getvalue()).decode()
-    return jsonify({'qr_code': img_str})
+# Umfrage anzeigen
+@app.route('/surveys/<survey_uuid>')
+def view_survey(survey_uuid):
+    survey = Survey.query.filter_by(uuid=survey_uuid).first_or_404()
+    return render_template('survey_detail.html', survey=survey)
 
+# QR-Code für Umfrage generieren
+@app.route('/surveys/<survey_uuid>/qr')
+def survey_qr(survey_uuid):
+    survey = Survey.query.filter_by(uuid=survey_uuid).first_or_404()
+    participate_url = url_for('participate_survey', survey_uuid=survey_uuid, _external=True)
+    
+    # QR-Code generieren
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(participate_url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # QR-Code in Base64 konvertieren
+    img_buffer = io.BytesIO()
+    img.save(img_buffer, format='PNG')
+    img_str = base64.b64encode(img_buffer.getvalue()).decode()
+    
+    return render_template('survey_qr.html', survey=survey, qr_code=img_str, participate_url=participate_url)
+
+# An Umfrage teilnehmen
+@app.route('/surveys/<survey_uuid>/participate')
+def participate_survey(survey_uuid):
+    survey = Survey.query.filter_by(uuid=survey_uuid).first_or_404()
+    return render_template('survey_participate.html', survey=survey)
+
+# Socket.IO Events
 @socketio.on('new_question')
 def handle_new_question(data):
-    """Handle new questions from host or participants"""
-    with app.app_context():
-        question = Question(
-            text=data['question'],
-            type=data.get('type', 'text'),
-            from_participant=data.get('from_participant', False)
-        )
+    survey_uuid = data['survey_uuid']
+    text = data['text']
+    question_type = data.get('type', 'text')
+    options = data.get('options', [])
+    
+    survey = Survey.query.filter_by(uuid=survey_uuid).first()
+    if survey:
+        # Erstelle die neue Frage
+        question = Question(text=text, type=question_type, survey=survey)
         db.session.add(question)
+        db.session.flush()  # Damit wir die question.id haben
+        
+        # Erstelle die Antwortoptionen für Multiple-Choice-Fragen
+        question_options = []
+        if question_type == 'choice' and options:
+            for i, option_text in enumerate(options):
+                option = QuestionOption(
+                    question_id=question.id,
+                    text=option_text,
+                    order=i
+                )
+                db.session.add(option)
+                question_options.append({
+                    'id': option.id,
+                    'text': option.text
+                })
+        
         db.session.commit()
         
-        emit('question_added', {
-            'id': question.id,
-            'text': question.text,
-            'type': question.type,
-            'from_participant': question.from_participant
+        # Sende die aktualisierte Frage an alle Clients
+        emit('questions_updated', {
+            'survey_uuid': survey_uuid,
+            'question': {
+                'id': question.id,
+                'text': question.text,
+                'type': question.type,
+                'options': question_options
+            }
         }, broadcast=True)
 
 @socketio.on('new_answer')
 def handle_new_answer(data):
-    """Handle new answers from participants"""
-    with app.app_context():
+    question_id = data['question_id']
+    text = data.get('text')
+    selected_option_id = data.get('selected_option_id')
+    
+    question = Question.query.get(question_id)
+    if question:
         answer = Answer(
-            text=data['answer'],
-            question_id=data['question_id']
+            question=question,
+            text=text if question.type == 'text' else None,
+            selected_option_id=selected_option_id if question.type == 'choice' else None
         )
         db.session.add(answer)
         db.session.commit()
         
-        question = Question.query.get(data['question_id'])
-        answers = [a.text for a in question.answers]
-        
-        emit('answer_added', {
-            'question_id': data['question_id'],
-            'answers': answers
+        emit('answers_updated', {
+            'question_id': question_id,
+            'answer': {
+                'id': answer.id,
+                'text': answer.text,
+                'selected_option_id': answer.selected_option_id
+            }
         }, broadcast=True)
 
-def init_db():
-    """Initialize the database"""
-    with app.app_context():
-        db.create_all()
-
 if __name__ == '__main__':
-    # Datenbank initialisieren
-    init_db()
-    
-    # Server starten
-    port = int(os.getenv('PORT', 8080))
-    socketio.run(app, 
-                debug=os.getenv('FLASK_ENV') == 'development',
-                host='0.0.0.0',
-                port=port,
-                allow_unsafe_werkzeug=True)
+    socketio.run(app, debug=True)

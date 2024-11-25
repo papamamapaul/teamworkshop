@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold">{{ survey.title }}</h1>
+            <p class="text-gray-600 mt-2">{{ survey.description }}</p>
+        </div>
+
+        <div class="space-y-6" id="questions">
+            {% for question in survey.questions %}
+            <div class="card bg-base-100 shadow-xl" id="question-{{ question.id }}">
+                <div class="card-body">
+                    <h3 class="card-title">{{ question.text }}</h3>
+                    
+                    {% if question.type == 'text' %}
+                    <div class="form-control mt-4">
+                        <textarea class="textarea textarea-bordered h-24" 
+                                placeholder="Ihre Antwort..."
+                                onchange="submitAnswer({{ question.id }}, this.value)"></textarea>
+                    </div>
+                    {% elif question.type == 'choice' %}
+                    <div class="form-control mt-4">
+                        <!-- Hier können später Multiple-Choice-Optionen hinzugefügt werden -->
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center py-8">
+                <p class="text-gray-500">Noch keine Fragen verfügbar.</p>
+                <p class="text-sm mt-2">Bitte warten Sie, bis der Host Fragen hinzufügt.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+const socket = io();
+
+socket.on('questions_updated', function(data) {
+    if (data.survey_uuid === '{{ survey.uuid }}') {
+        location.reload();  // Aktualisiere die Seite für neue Fragen
+    }
+});
+
+function submitAnswer(questionId, text) {
+    socket.emit('new_answer', {
+        question_id: questionId,
+        text: text
+    });
+}
+
+socket.on('answers_updated', function(data) {
+    // Optional: Hier können Sie Feedback anzeigen, dass die Antwort gespeichert wurde
+    console.log('Antwort gespeichert:', data);
+});
+</script>
+{% endblock %}

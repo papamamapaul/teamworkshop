@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-2xl mx-auto">
+        <div class="text-center">
+            <h1 class="text-3xl font-bold mb-2">{{ survey.title }}</h1>
+            <p class="text-gray-600 mb-8">{{ survey.description }}</p>
+            
+            <div class="bg-white p-8 rounded-xl shadow-lg mb-8">
+                <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code" class="mx-auto mb-4">
+                <p class="text-sm text-gray-500">Scannen Sie den QR-Code oder nutzen Sie den Link unten</p>
+            </div>
+            
+            <div class="space-y-4">
+                <p class="text-lg break-all">{{ participate_url }}</p>
+                <div class="flex justify-center gap-4">
+                    <button onclick="copyToClipboard('{{ participate_url }}')" class="btn btn-outline">
+                        Link kopieren
+                    </button>
+                    <a href="{{ url_for('view_survey', survey_uuid=survey.uuid) }}" class="btn btn-primary">
+                        Zurück zur Umfrage
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(function() {
+        alert('Link wurde in die Zwischenablage kopiert!');
+    }).catch(function(err) {
+        console.error('Fehler beim Kopieren:', err);
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-2xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8">Neue Umfrage erstellen</h1>
+        
+        <form method="POST" action="/surveys/new" class="space-y-6">
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text">Titel</span>
+                </label>
+                <input type="text" name="title" class="input input-bordered" required>
+            </div>
+            
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text">Beschreibung</span>
+                </label>
+                <textarea name="description" class="textarea textarea-bordered h-24"></textarea>
+            </div>
+            
+            <div class="form-control mt-6">
+                <button type="submit" class="btn btn-primary">Umfrage erstellen</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

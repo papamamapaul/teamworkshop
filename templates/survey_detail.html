@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold">{{ survey.title }}</h1>
+            <p class="text-gray-600 mt-2">{{ survey.description }}</p>
+        </div>
+
+        <!-- QR Code Button -->
+        <div class="text-center mb-8">
+            <a href="{{ url_for('survey_qr', survey_uuid=survey.uuid) }}" class="btn btn-primary">
+                QR-Code anzeigen
+            </a>
+        </div>
+
+        <!-- Fragen Liste -->
+        <div class="space-y-6" id="questions-container">
+            {% for question in survey.questions %}
+            <div class="card bg-base-100 shadow-xl" id="question-{{ question.id }}">
+                <div class="card-body">
+                    <h3 class="card-title">{{ question.text }}</h3>
+                    <p class="text-gray-600">Typ: {{ question.type }}</p>
+                    {% if question.type == 'choice' %}
+                    <div class="mt-4">
+                        <h4 class="font-semibold mb-2">Antwortoptionen:</h4>
+                        <ul class="list-disc list-inside">
+                            {% for option in question.options %}
+                            <li>{{ option.text }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center py-8" id="no-questions-message">
+                <p class="text-gray-500">Noch keine Fragen vorhanden.</p>
+                <p class="text-sm mt-2">Fügen Sie unten neue Fragen hinzu.</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Neue Frage Form -->
+        <div class="mt-8">
+            <div class="card bg-base-100 shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title">Neue Frage hinzufügen</h2>
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Frage</span>
+                        </label>
+                        <input type="text" id="question-text" class="input input-bordered" placeholder="Ihre Frage...">
+                    </div>
+                    <div class="form-control mt-4">
+                        <label class="label">
+                            <span class="label-text">Fragetyp</span>
+                        </label>
+                        <select id="question-type" class="select select-bordered" onchange="toggleOptionsInput()">
+                            <option value="text">Text</option>
+                            <option value="choice">Multiple Choice</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Multiple Choice Optionen -->
+                    <div id="options-container" class="form-control mt-4" style="display: none;">
+                        <label class="label">
+                            <span class="label-text">Antwortoptionen</span>
+                            <button type="button" onclick="addOptionInput()" class="btn btn-sm btn-circle btn-ghost">+</button>
+                        </label>
+                        <div id="options-list" class="space-y-2">
+                            <div class="flex gap-2">
+                                <input type="text" class="option-input input input-bordered flex-grow" placeholder="Option 1">
+                                <button type="button" onclick="removeOptionInput(this)" class="btn btn-square btn-ghost">×</button>
+                            </div>
+                            <div class="flex gap-2">
+                                <input type="text" class="option-input input input-bordered flex-grow" placeholder="Option 2">
+                                <button type="button" onclick="removeOptionInput(this)" class="btn btn-square btn-ghost">×</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-actions justify-end mt-4">
+                        <button onclick="addQuestion()" class="btn btn-primary">Frage hinzufügen</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const socket = io();
+
+function toggleOptionsInput() {
+    const type = document.getElementById('question-type').value;
+    const optionsContainer = document.getElementById('options-container');
+    optionsContainer.style.display = type === 'choice' ? 'block' : 'none';
+}
+
+function addOptionInput() {
+    const optionsList = document.getElementById('options-list');
+    const newOption = document.createElement('div');
+    newOption.className = 'flex gap-2';
+    newOption.innerHTML = `
+        <input type="text" class="option-input input input-bordered flex-grow" placeholder="Neue Option">
+        <button type="button" onclick="removeOptionInput(this)" class="btn btn-square btn-ghost">×</button>
+    `;
+    optionsList.appendChild(newOption);
+}
+
+function removeOptionInput(button) {
+    const optionsList = document.getElementById('options-list');
+    if (optionsList.children.length > 2) {
+        button.parentElement.remove();
+    } else {
+        alert('Mindestens zwei Optionen sind erforderlich.');
+    }
+}
+
+function addQuestion() {
+    const text = document.getElementById('question-text').value;
+    const type = document.getElementById('question-type').value;
+    
+    if (text.trim() === '') {
+        alert('Bitte geben Sie eine Frage ein.');
+        return;
+    }
+    
+    let options = [];
+    if (type === 'choice') {
+        const optionInputs = document.getElementsByClassName('option-input');
+        for (let input of optionInputs) {
+            if (input.value.trim() !== '') {
+                options.push(input.value.trim());
+            }
+        }
+        
+        if (options.length < 2) {
+            alert('Bitte geben Sie mindestens zwei Antwortoptionen ein.');
+            return;
+        }
+    }
+    
+    socket.emit('new_question', {
+        survey_uuid: '{{ survey.uuid }}',
+        text: text,
+        type: type,
+        options: options
+    });
+    
+    // Formular zurücksetzen
+    document.getElementById('question-text').value = '';
+    if (type === 'choice') {
+        const optionInputs = document.getElementsByClassName('option-input');
+        Array.from(optionInputs).forEach(input => input.value = '');
+    }
+}
+
+socket.on('questions_updated', function(data) {
+    if (data.survey_uuid === '{{ survey.uuid }}') {
+        // Entferne die "Keine Fragen" Nachricht, falls vorhanden
+        const noQuestionsMessage = document.getElementById('no-questions-message');
+        if (noQuestionsMessage) {
+            noQuestionsMessage.remove();
+        }
+        
+        // Erstelle das neue Fragen-Element
+        const questionsContainer = document.getElementById('questions-container');
+        const newQuestionDiv = document.createElement('div');
+        newQuestionDiv.className = 'card bg-base-100 shadow-xl';
+        newQuestionDiv.id = `question-${data.question.id}`;
+        
+        let optionsHtml = '';
+        if (data.question.type === 'choice' && data.question.options) {
+            optionsHtml = `
+                <div class="mt-4">
+                    <h4 class="font-semibold mb-2">Antwortoptionen:</h4>
+                    <ul class="list-disc list-inside">
+                        ${data.question.options.map(option => `<li>${option.text}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        newQuestionDiv.innerHTML = `
+            <div class="card-body">
+                <h3 class="card-title">${data.question.text}</h3>
+                <p class="text-gray-600">Typ: ${data.question.type}</p>
+                ${optionsHtml}
+            </div>
+        `;
+        
+        // Füge die neue Frage zum Container hinzu
+        questionsContainer.appendChild(newQuestionDiv);
+    }
+});
+</script>
+{% endblock %}
