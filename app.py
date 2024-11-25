@@ -8,6 +8,8 @@ import base64
 from models import db, Question, Answer
 from config import config
 
+socketio = SocketIO()
+
 def create_app():
     app = Flask(__name__)
     
@@ -19,19 +21,22 @@ def create_app():
     db.init_app(app)
     Migrate(app, db)
     
+    # SocketIO initialisieren
+    socketio.init_app(app)
+    
+    # Führe Migrationen beim Start aus
+    with app.app_context():
+        try:
+            from flask_migrate import upgrade
+            upgrade()
+        except Exception as e:
+            print(f"Migration error: {e}")
+            # Fahre trotz Migrationsfehler fort
+    
     return app
 
+# Erstelle die App
 app = create_app()
-socketio = SocketIO(app)
-
-# Führe Migrationen beim Start aus
-with app.app_context():
-    try:
-        from flask_migrate import upgrade
-        upgrade()
-    except Exception as e:
-        print(f"Migration error: {e}")
-        # Fahre trotz Migrationsfehler fort
 
 @app.route('/')
 def index():
