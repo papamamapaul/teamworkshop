@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 from flask_socketio import SocketIO, emit
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -65,13 +65,95 @@ def survey_qr(survey_uuid):
     
     return render_template('survey_qr.html', survey=survey, qr_code=img_str, participate_url=participate_url)
 
-# An Umfrage teilnehmen
+# Umfrage präsentieren (Host-Ansicht)
+@app.route('/surveys/<survey_uuid>/present')
+def present_survey(survey_uuid):
+    survey = Survey.query.filter_by(uuid=survey_uuid).first_or_404()
+    
+    # Konvertiere Fragen in ein serialisierbares Format
+    questions_data = []
+    for question in survey.questions:
+        question_data = {
+            'id': question.id,
+            'text': question.text,
+            'type': question.type,
+            'options': [{'id': opt.id, 'text': opt.text} for opt in question.options]
+        }
+        questions_data.append(question_data)
+    
+    return render_template('survey_present.html', 
+                         survey=survey,
+                         questions_json=questions_data,
+                         is_host=True)
+
+# Umfrage teilnehmen (Teilnehmer-Ansicht)
 @app.route('/surveys/<survey_uuid>/participate')
 def participate_survey(survey_uuid):
     survey = Survey.query.filter_by(uuid=survey_uuid).first_or_404()
-    return render_template('survey_participate.html', survey=survey)
+    session['participant_id'] = str(uuid.uuid4())  # Eindeutige ID für jeden Teilnehmer
+    
+    return render_template('survey_present.html', 
+                         survey=survey,
+                         is_host=False)
+
+# API-Route für Fragendetails
+@app.route('/api/questions/<int:question_id>')
+def get_question(question_id):
+    question = Question.query.get_or_404(question_id)
+    return jsonify({
+        'id': question.id,
+        'text': question.text,
+        'type': question.type,
+        'options': [{'id': opt.id, 'text': opt.text} for opt in question.options]
+    })
 
 # Socket.IO Events
+@socketio.on('host_change_question')
+def handle_host_change_question(data):
+    survey_uuid = data['survey_uuid']
+    question_id = data['question_id']
+    # Benachrichtige alle Teilnehmer über die neue aktive Frage
+    emit('question_changed', {'question_id': question_id}, broadcast=True, include_self=False)
+
+@socketio.on('submit_answer')
+def handle_submit_answer(data):
+    survey_uuid = data['survey_uuid']
+    question_id = data['question_id']
+    answer_text = data.get('answer_text')
+    selected_option_id = data.get('selected_option_id')
+    participant_id = session.get('participant_id')
+
+    if not participant_id:
+        return {'error': 'No participant ID found'}
+
+    # Prüfe, ob bereits eine Antwort existiert
+    existing_answer = Answer.query.filter_by(
+        question_id=question_id,
+        participant_id=participant_id
+    ).first()
+
+    if existing_answer:
+        return {'error': 'Already answered'}
+
+    # Speichere die neue Antwort
+    answer = Answer(
+        question_id=question_id,
+        text=answer_text,
+        selected_option_id=selected_option_id,
+        participant_id=participant_id
+    )
+    db.session.add(answer)
+    db.session.commit()
+
+    # Sende die Antwort an den Host
+    emit('answer_received', {
+        'question_id': question_id,
+        'answer': {
+            'text': answer_text,
+            'selected_option_id': selected_option_id
+        }
+    }, broadcast=True)
+
 @socketio.on('new_question')
 def handle_new_question(data):
     survey_uuid = data['survey_uuid']

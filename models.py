@@ -14,12 +14,13 @@ class Survey(db.Model):
 
 class Question(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    survey_id = db.Column(db.Integer, db.ForeignKey('survey.id', name='fk_question_survey'), nullable=False)
+    survey_id = db.Column(db.Integer, db.ForeignKey('survey.id'), nullable=False)
     text = db.Column(db.Text, nullable=False)
-    type = db.Column(db.String(20), nullable=False)  # 'text' oder 'choice'
-    options = db.relationship('QuestionOption', backref='question', lazy=True)
-    answers = db.relationship('Answer', backref='question', lazy=True)
+    type = db.Column(db.String(20), default='text')  # 'text' oder 'choice'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    options = db.relationship('QuestionOption', back_populates='question', cascade='all, delete-orphan')
+    answers = db.relationship('Answer', back_populates='question', cascade='all, delete-orphan')
 
 class QuestionOption(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -27,9 +28,15 @@ class QuestionOption(db.Model):
     text = db.Column(db.Text, nullable=False)
     order = db.Column(db.Integer, nullable=False, default=0)
 
+    question = db.relationship('Question', back_populates='options')
+
 class Answer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     question_id = db.Column(db.Integer, db.ForeignKey('question.id'), nullable=False)
     text = db.Column(db.Text)
     selected_option_id = db.Column(db.Integer, db.ForeignKey('question_option.id'))
+    participant_id = db.Column(db.String(36), nullable=False)  # UUID für Teilnehmer
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    question = db.relationship('Question', back_populates='answers')
+    selected_option = db.relationship('QuestionOption')

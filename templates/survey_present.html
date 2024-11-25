@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold">{{ survey.title }}</h1>
+            <p class="text-gray-600 mt-2">{{ survey.description }}</p>
+        </div>
+
+        <!-- Aktuelle Frage und Antworten -->
+        <div id="current-question" class="card bg-base-100 shadow-xl mb-8">
+            <div class="card-body">
+                <h2 class="card-title text-2xl mb-4">Aktuelle Frage</h2>
+                {% if survey.questions %}
+                <div id="question-display">
+                    <p class="text-xl mb-4">Wählen Sie eine Frage aus der Liste unten</p>
+                </div>
+                {% else %}
+                <p class="text-gray-500">Noch keine Fragen vorhanden</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Antworten -->
+        <div id="answers-container" class="card bg-base-100 shadow-xl mb-8" style="display: none;">
+            <div class="card-body">
+                <h3 class="card-title">Antworten</h3>
+                <div id="answers-list" class="space-y-2">
+                    <!-- Antworten werden hier dynamisch eingefügt -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Fragenliste -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">Alle Fragen</h2>
+                <div class="space-y-4 mt-4">
+                    {% for question in survey.questions %}
+                    <div class="flex items-center gap-4">
+                        <button onclick="showQuestion({{ question.id }})" class="btn btn-outline flex-grow text-left">
+                            {{ question.text }}
+                        </button>
+                    </div>
+                    {% else %}
+                    <p class="text-gray-500">Keine Fragen verfügbar</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const socket = io();
+let currentQuestionId = null;
+const questions = {{ questions_json|tojson|safe }};
+
+function showQuestion(questionId) {
+    currentQuestionId = questionId;
+    
+    // Finde die Frage aus den verfügbaren Fragen
+    const question = questions.find(q => q.id === questionId);
+    
+    if (!question) return;
+    
+    // Aktualisiere die Fragenansicht
+    const questionDisplay = document.getElementById('question-display');
+    questionDisplay.innerHTML = `
+        <p class="text-xl mb-4">${question.text}</p>
+        ${question.type === 'choice' ? `
+            <div class="space-y-2">
+                ${question.options.map(option => `
+                    <div class="flex items-center">
+                        <input type="radio" name="answer" value="${option.id}" class="radio radio-primary mr-2" disabled>
+                        <label>${option.text}</label>
+                    </div>
+                `).join('')}
+            </div>
+        ` : ''}
+    `;
+    
+    // Zeige den Antworten-Container
+    document.getElementById('answers-container').style.display = 'block';
+    
+    // Lade vorhandene Antworten
+    loadAnswers(questionId);
+}
+
+function loadAnswers(questionId) {
+    const answersList = document.getElementById('answers-list');
+    answersList.innerHTML = ''; // Lösche alte Antworten
+}
+
+socket.on('answers_updated', function(data) {
+    if (data.question_id === currentQuestionId) {
+        const answersList = document.getElementById('answers-list');
+        const answerDiv = document.createElement('div');
+        answerDiv.className = 'bg-base-200 p-4 rounded-lg';
+        
+        if (data.answer.text) {
+            answerDiv.textContent = data.answer.text;
+        } else if (data.answer.selected_option_id) {
+            // Finde die ausgewählte Option
+            const question = questions.find(q => q.id === currentQuestionId);
+            if (question) {
+                const option = question.options.find(o => o.id === data.answer.selected_option_id);
+                if (option) {
+                    answerDiv.textContent = option.text;
+                }
+            }
+        }
+        
+        answersList.appendChild(answerDiv);
+    }
+});
+</script>
+{% endblock %}
