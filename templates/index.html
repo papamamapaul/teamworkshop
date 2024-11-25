@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="hero min-h-[80vh]">
+    <div class="hero-content text-center">
+        <div class="max-w-md">
+            <h1 class="text-5xl font-bold">Team Workshop App</h1>
+            <p class="py-6">Willkommen zur interaktiven Workshop-App! Wählen Sie aus, ob Sie als Host Fragen erstellen oder als Teilnehmer antworten möchten.</p>
+            <div class="flex gap-4 justify-center">
+                <a href="/host" class="btn btn-primary">Als Host starten</a>
+                <a href="/participate" class="btn btn-secondary">Als Teilnehmer beitreten</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

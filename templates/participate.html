@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-8">
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Neue Frage stellen</h2>
+            <form id="participantQuestionForm" class="space-y-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Ihre Frage</span>
+                    </label>
+                    <input type="text" id="participantQuestionText" class="input input-bordered" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Frage einreichen</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Aktuelle Fragen</h2>
+            <div id="activeQuestions" class="space-y-4">
+                <!-- Aktive Fragen werden hier dynamisch eingefügt -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/participate.js') }}"></script>
+{% endblock %}

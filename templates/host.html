@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Neue Frage erstellen</h2>
+            <form id="questionForm" class="space-y-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Frage</span>
+                    </label>
+                    <input type="text" id="questionText" class="input input-bordered" required>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Antworttyp</span>
+                    </label>
+                    <select id="questionType" class="select select-bordered">
+                        <option value="text">Text</option>
+                        <option value="choice">Multiple Choice</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Frage hinzufügen</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">QR-Code für Teilnehmer</h2>
+            <div id="qrcode" class="flex justify-center py-4"></div>
+            <p class="text-sm text-center">Teilnehmer können diesen QR-Code scannen, um beizutreten</p>
+        </div>
+    </div>
+
+    <div class="col-span-1 md:col-span-2 card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Aktuelle Fragen und Antworten</h2>
+            <div id="questionsContainer" class="space-y-4">
+                <!-- Fragen und Antworten werden hier dynamisch eingefügt -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/host.js') }}"></script>
+{% endblock %}
