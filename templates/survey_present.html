@@ -1,119 +1,136 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8">
-    <div class="max-w-4xl mx-auto">
-        <div class="text-center mb-8">
-            <h1 class="text-3xl font-bold">{{ survey.title }}</h1>
-            <p class="text-gray-600 mt-2">{{ survey.description }}</p>
-        </div>
-
-        <!-- Aktuelle Frage und Antworten -->
-        <div id="current-question" class="card bg-base-100 shadow-xl mb-8">
-            <div class="card-body">
-                <h2 class="card-title text-2xl mb-4">Aktuelle Frage</h2>
-                {% if survey.questions %}
-                <div id="question-display">
-                    <p class="text-xl mb-4">Wählen Sie eine Frage aus der Liste unten</p>
-                </div>
-                {% else %}
-                <p class="text-gray-500">Noch keine Fragen vorhanden</p>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Antworten -->
-        <div id="answers-container" class="card bg-base-100 shadow-xl mb-8" style="display: none;">
-            <div class="card-body">
-                <h3 class="card-title">Antworten</h3>
-                <div id="answers-list" class="space-y-2">
-                    <!-- Antworten werden hier dynamisch eingefügt -->
-                </div>
-            </div>
-        </div>
-
-        <!-- Fragenliste -->
-        <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-                <h2 class="card-title">Alle Fragen</h2>
-                <div class="space-y-4 mt-4">
-                    {% for question in survey.questions %}
-                    <div class="flex items-center gap-4">
-                        <button onclick="showQuestion({{ question.id }})" class="btn btn-outline flex-grow text-left">
-                            {{ question.text }}
-                        </button>
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <h2>{{ survey.title }}</h2>
+            <p>{{ survey.description }}</p>
+            
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h5 class="card-title">Fragen und Antworten</h5>
+                    <div id="questions-container">
+                        {% for question in survey.questions %}
+                        <div class="question-block mb-4" id="question-block-{{ question.id }}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h6 class="mb-2">{{ question.text }}</h6>
+                                <button class="btn btn-primary btn-sm" onclick="showQuestion({{ question.id }})">
+                                    Aktivieren
+                                </button>
+                            </div>
+                            <div class="answers-container ms-3" id="answers-{{ question.id }}">
+                                <p class="text-muted small">Noch keine Antworten</p>
+                            </div>
+                        </div>
+                        {% endfor %}
                     </div>
-                    {% else %}
-                    <p class="text-gray-500">Keine Fragen verfügbar</p>
-                    {% endfor %}
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h5 class="card-title">Aktuelle Frage</h5>
+                    <div id="current-question" class="alert alert-info">
+                        <p class="mb-0">Keine Frage ausgewählt</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">QR-Code für Teilnehmer</h5>
+                    <img src="{{ qr_code }}" alt="QR-Code" class="img-fluid">
+                    <div class="mt-2">
+                        <small class="text-muted">Link zum Teilen:</small><br>
+                        <code>{{ request.url_root }}surveys/{{ survey.uuid }}/participate</code>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
-const socket = io();
-let currentQuestionId = null;
-const questions = {{ questions_json|tojson|safe }};
-
-function showQuestion(questionId) {
-    currentQuestionId = questionId;
+    const socket = io();
+    const surveyUuid = "{{ survey.uuid }}";
+    let currentQuestionId = null;
     
-    // Finde die Frage aus den verfügbaren Fragen
-    const question = questions.find(q => q.id === questionId);
+    // Beim Verbinden dem Umfrage-Raum beitreten
+    socket.on('connect', () => {
+        socket.emit('join', {survey_uuid: surveyUuid});
+    });
     
-    if (!question) return;
-    
-    // Aktualisiere die Fragenansicht
-    const questionDisplay = document.getElementById('question-display');
-    questionDisplay.innerHTML = `
-        <p class="text-xl mb-4">${question.text}</p>
-        ${question.type === 'choice' ? `
-            <div class="space-y-2">
-                ${question.options.map(option => `
-                    <div class="flex items-center">
-                        <input type="radio" name="answer" value="${option.id}" class="radio radio-primary mr-2" disabled>
-                        <label>${option.text}</label>
-                    </div>
-                `).join('')}
-            </div>
-        ` : ''}
-    `;
-    
-    // Zeige den Antworten-Container
-    document.getElementById('answers-container').style.display = 'block';
-    
-    // Lade vorhandene Antworten
-    loadAnswers(questionId);
-}
-
-function loadAnswers(questionId) {
-    const answersList = document.getElementById('answers-list');
-    answersList.innerHTML = ''; // Lösche alte Antworten
-}
-
-socket.on('answers_updated', function(data) {
-    if (data.question_id === currentQuestionId) {
-        const answersList = document.getElementById('answers-list');
-        const answerDiv = document.createElement('div');
-        answerDiv.className = 'bg-base-200 p-4 rounded-lg';
-        
-        if (data.answer.text) {
-            answerDiv.textContent = data.answer.text;
-        } else if (data.answer.selected_option_id) {
-            // Finde die ausgewählte Option
-            const question = questions.find(q => q.id === currentQuestionId);
-            if (question) {
-                const option = question.options.find(o => o.id === data.answer.selected_option_id);
-                if (option) {
-                    answerDiv.textContent = option.text;
-                }
-            }
+    // Frage anzeigen
+    async function showQuestion(questionId) {
+        // Vorherige aktive Frage deaktivieren
+        if (currentQuestionId) {
+            document.querySelector(`#question-block-${currentQuestionId}`).classList.remove('bg-light');
         }
         
-        answersList.appendChild(answerDiv);
+        currentQuestionId = questionId;
+        
+        // Hole Fragendetails
+        const response = await fetch(`/api/questions/${questionId}`);
+        const question = await response.json();
+        
+        // Zeige aktuelle Frage an
+        document.querySelector('#current-question').innerHTML = `
+            <p class="mb-0"><strong>Aktiv:</strong> ${question.text}</p>
+        `;
+        
+        // Markiere die aktuelle Frage
+        document.querySelector(`#question-block-${questionId}`).classList.add('bg-light');
+        
+        // Informiere alle Teilnehmer
+        socket.emit('show_question', {
+            survey_uuid: surveyUuid,
+            question_id: questionId
+        });
     }
-});
+    
+    // Neue Antwort empfangen
+    socket.on('new_answer', (data) => {
+        const answersContainer = document.querySelector(`#answers-${data.question_id}`);
+        
+        // Entferne die "Keine Antworten" Nachricht, falls vorhanden
+        if (answersContainer.querySelector('.text-muted')) {
+            answersContainer.innerHTML = '';
+        }
+        
+        const answerElement = document.createElement('div');
+        answerElement.className = 'answer-item mt-2';
+        answerElement.innerHTML = `
+            <div class="card">
+                <div class="card-body py-2 px-3">
+                    <p class="mb-0">${data.answer}</p>
+                </div>
+            </div>
+        `;
+        answersContainer.appendChild(answerElement);
+    });
 </script>
+
+<style>
+    .question-block {
+        padding: 1rem;
+        border-radius: 0.25rem;
+        transition: background-color 0.3s;
+    }
+    .question-block.bg-light {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+    }
+    .answer-item {
+        animation: fadeIn 0.5s;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
 {% endblock %}

@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="card bg-light-grey shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title text-petrol mb-4">{{ survey.title }}</h2>
+            <p class="text-petrol-60 mb-6">{{ survey.description }}</p>
+
+            <div id="questions-container">
+                {% for question in questions %}
+                <div class="card bg-light-grey-20k mb-6 question-card" id="question_{{ question.id }}" style="display: none;">
+                    <div class="card-body">
+                        <h3 class="text-xl font-bold text-petrol mb-4">{{ question.text }}</h3>
+                        
+                        <div class="flex flex-col gap-4">
+                            {% if question.type == 'choice' %}
+                            <!-- Yes/No Buttons -->
+                            <div class="grid grid-cols-2 gap-4">
+                                <button onclick="submitAnswer('{{ question.id }}', 'ja', 'choice')" 
+                                        class="btn bg-accent-green hover:bg-accent-green/90 text-light-grey border-none">
+                                    <i class="fas fa-check"></i> Ja
+                                </button>
+                                <button onclick="submitAnswer('{{ question.id }}', 'nein', 'choice')" 
+                                        class="btn bg-accent-red hover:bg-accent-red/90 text-light-grey border-none">
+                                    <i class="fas fa-times"></i> Nein
+                                </button>
+                            </div>
+                            {% else %}
+                            <!-- Text Input -->
+                            <div class="form-control">
+                                <textarea id="text_{{ question.id }}" 
+                                         class="textarea textarea-bordered bg-light-grey text-petrol h-24"
+                                         placeholder="Ihre Antwort..."></textarea>
+                                <button onclick="submitAnswer('{{ question.id }}', null, 'text')"
+                                        class="btn bg-petrol hover:bg-petrol-20k text-light-grey mt-4 border-none">
+                                    <i class="fas fa-paper-plane"></i> Antwort absenden
+                                </button>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                <div id="waiting-message" class="text-center py-8">
+                    <h4 class="text-xl font-bold text-petrol mb-2">Warten auf aktive Frage...</h4>
+                    <p class="text-petrol-60">Der Moderator wird in Kürze eine Frage aktivieren.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Socket.IO Integration -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+    const socket = io();
+    const surveyUuid = '{{ survey.uuid }}';
+    const participantId = '{{ participant_id }}';
+    
+    // Join survey room
+    socket.emit('join', {room: surveyUuid});
+    
+    // Listen for active question updates
+    socket.on('update_question', function(data) {
+        // Hide all questions and show waiting message
+        document.querySelectorAll('.question-card').forEach(card => {
+            card.style.display = 'none';
+        });
+        document.getElementById('waiting-message').style.display = 'block';
+        
+        // Show active question if exists
+        if (data.question_id) {
+            const questionCard = document.getElementById(`question_${data.question_id}`);
+            if (questionCard) {
+                questionCard.style.display = 'block';
+                document.getElementById('waiting-message').style.display = 'none';
+                
+                // Enable all inputs and buttons in the card
+                const inputs = questionCard.querySelectorAll('button, textarea');
+                inputs.forEach(input => {
+                    input.disabled = false;
+                });
+            }
+        }
+    });
+    
+    function submitAnswer(questionId, answer, type) {
+        let answerText = answer;
+        const questionCard = document.getElementById(`question_${questionId}`);
+        
+        if (type === 'text') {
+            const textArea = document.getElementById(`text_${questionId}`);
+            if (!textArea.value.trim()) {
+                alert('Bitte geben Sie eine Antwort ein.');
+                return;
+            }
+            answerText = textArea.value.trim();
+        }
+        
+        // Send answer
+        socket.emit('submit_answer', {
+            survey_uuid: surveyUuid,
+            question_id: questionId,
+            participant_id: participantId,
+            text: answerText,
+            type: type
+        });
+        
+        // Disable all inputs in the card
+        const inputs = questionCard.querySelectorAll('button, textarea');
+        inputs.forEach(input => {
+            input.disabled = true;
+        });
+        
+        // Show success message
+        const successMessage = document.createElement('div');
+        successMessage.className = 'alert bg-accent-green text-light-grey mt-4';
+        successMessage.innerHTML = `
+            <i class="fas fa-check-circle"></i>
+            <span>Ihre Antwort wurde erfolgreich übermittelt!</span>
+        `;
+        questionCard.querySelector('.card-body').appendChild(successMessage);
+    }
+</script>
+{% endblock %}

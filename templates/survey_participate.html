@@ -1,61 +1,65 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8">
-    <div class="max-w-4xl mx-auto">
-        <div class="text-center mb-8">
-            <h1 class="text-3xl font-bold">{{ survey.title }}</h1>
-            <p class="text-gray-600 mt-2">{{ survey.description }}</p>
-        </div>
-
-        <div class="space-y-6" id="questions">
-            {% for question in survey.questions %}
-            <div class="card bg-base-100 shadow-xl" id="question-{{ question.id }}">
-                <div class="card-body">
-                    <h3 class="card-title">{{ question.text }}</h3>
-                    
-                    {% if question.type == 'text' %}
-                    <div class="form-control mt-4">
-                        <textarea class="textarea textarea-bordered h-24" 
-                                placeholder="Ihre Antwort..."
-                                onchange="submitAnswer({{ question.id }}, this.value)"></textarea>
-                    </div>
-                    {% elif question.type == 'choice' %}
-                    <div class="form-control mt-4">
-                        <!-- Hier können später Multiple-Choice-Optionen hinzugefügt werden -->
-                    </div>
-                    {% endif %}
-                </div>
+<div class="container mt-4">
+    <h2>Teilnehmen an der Umfrage</h2>
+    
+    <div id="current-question" class="card mt-4">
+        <div class="card-body">
+            <h5 class="card-title">Warte auf Frage...</h5>
+            <div id="question-content"></div>
+            <div id="answer-form" class="mt-3" style="display: none;">
+                <textarea id="answer-text" class="form-control mb-2" rows="3"></textarea>
+                <button onclick="submitAnswer()" class="btn btn-primary">Antwort senden</button>
             </div>
-            {% else %}
-            <div class="text-center py-8">
-                <p class="text-gray-500">Noch keine Fragen verfügbar.</p>
-                <p class="text-sm mt-2">Bitte warten Sie, bis der Host Fragen hinzufügt.</p>
-            </div>
-            {% endfor %}
         </div>
     </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
 <script>
-const socket = io();
-
-socket.on('questions_updated', function(data) {
-    if (data.survey_uuid === '{{ survey.uuid }}') {
-        location.reload();  // Aktualisiere die Seite für neue Fragen
-    }
-});
-
-function submitAnswer(questionId, text) {
-    socket.emit('new_answer', {
-        question_id: questionId,
-        text: text
+    const socket = io();
+    const surveyUuid = "{{ survey.uuid }}";
+    let currentQuestionId = null;
+    
+    // Beim Verbinden dem Umfrage-Raum beitreten
+    socket.on('connect', () => {
+        socket.emit('join', {survey_uuid: surveyUuid});
     });
-}
-
-socket.on('answers_updated', function(data) {
-    // Optional: Hier können Sie Feedback anzeigen, dass die Antwort gespeichert wurde
-    console.log('Antwort gespeichert:', data);
-});
+    
+    // Neue Frage anzeigen
+    socket.on('update_question', async (data) => {
+        currentQuestionId = data.question_id;
+        const response = await fetch(`/api/questions/${currentQuestionId}`);
+        const question = await response.json();
+        
+        document.querySelector('#question-content').innerHTML = `
+            <p class="card-text">${question.text}</p>
+        `;
+        
+        document.querySelector('#answer-form').style.display = 'block';
+    });
+    
+    // Antwort senden
+    function submitAnswer() {
+        const answerText = document.querySelector('#answer-text').value;
+        
+        socket.emit('submit_answer', {
+            survey_uuid: surveyUuid,
+            question_id: currentQuestionId,
+            answer: answerText
+        });
+        
+        // Formular zurücksetzen und ausblenden
+        document.querySelector('#answer-text').value = '';
+        document.querySelector('#answer-form').style.display = 'none';
+    }
+    
+    // Aufräumen beim Verlassen
+    window.addEventListener('beforeunload', () => {
+        socket.emit('leave', {survey_uuid: surveyUuid});
+    });
 </script>
 {% endblock %}

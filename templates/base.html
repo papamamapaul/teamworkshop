@@ -1,42 +1,144 @@
 <!DOCTYPE html>
-<html lang="de" data-theme="light">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team Workshop App</title>
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.4/dist/full.css" rel="stylesheet" type="text/css" />
+    <title>TeamPulse</title>
+    
+    <!-- Tailwind CSS and DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-</head>
-<body>
-    <div class="min-h-screen bg-base-200">
-        <div class="navbar bg-base-100 shadow-lg">
-            <div class="flex-1">
-                <a href="/" class="btn btn-ghost normal-case text-xl">Team Workshop</a>
-            </div>
-            <div class="flex-none">
-                <ul class="menu menu-horizontal px-1">
-                    <li><a href="/surveys">Umfragen</a></li>
-                    <li><a href="/surveys/new">Neue Umfrage</a></li>
-                </ul>
-            </div>
-        </div>
-        
-        <main class="container mx-auto py-8">
-            {% block content %}{% endblock %}
-        </main>
-    </div>
-
+    
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
     <script>
-        // Socket.IO Verbindung mit korrektem Pfad
-        const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const socketUrl = socketProtocol + '//' + window.location.host;
-        const socket = io(socketUrl, {
-            path: '/socket.io',
-            transports: ['websocket']
-        });
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // Light Grey Palette
+                        'light-grey': '#E6E6E6',
+                        'light-grey-20k': '#C8C8C8',
+                        'light-grey-40k': '#9E9E9E',
+                        'light-grey-60k': '#707070',
+                        'light-grey-80k': '#444444',
+                        
+                        // Petrol Palette
+                        'petrol': '#00677F',
+                        'petrol-20k': '#00566A',
+                        'petrol-40k': '#004355',
+                        'petrol-80': '#007A93',
+                        'petrol-60': '#5097AB',
+                        'petrol-40': '#79AEBF',
+                        'petrol-20': '#A6CAD8',
+                        
+                        // Accent Colors
+                        'accent-yellow': '#FFFF40',
+                        'accent-green': '#6EA046',
+                        'accent-orange': '#E69123',
+                        'accent-red': '#FF0000',
+                    }
+                },
+                fontFamily: {
+                    sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                }
+            },
+            plugins: [require("daisyui")],
+            daisyui: {
+                themes: [
+                    {
+                        workshop: {
+                            "primary": "#00677F",    // petrol
+                            "primary-content": "#E6E6E6", // light-grey
+                            "secondary": "#5097AB",   // petrol-60
+                            "secondary-content": "#E6E6E6",
+                            "accent": "#FFFF40",      // yellow
+                            "accent-content": "#444444", // light-grey-80k
+                            "neutral": "#9E9E9E",     // light-grey-40k
+                            "neutral-content": "#444444",
+                            "base-100": "#E6E6E6",    // light-grey
+                            "base-200": "#C8C8C8",    // light-grey-20k
+                            "base-300": "#9E9E9E",    // light-grey-40k
+                            "base-content": "#444444", // light-grey-80k
+                            "info": "#79AEBF",        // petrol-40
+                            "success": "#6EA046",     // green
+                            "warning": "#E69123",     // orange
+                            "error": "#FF0000",       // red
+                        },
+                    },
+                ],
+            },
+        }
     </script>
-
+    
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-base-100" data-theme="workshop">
+    <div class="drawer">
+        <input id="my-drawer-3" type="checkbox" class="drawer-toggle" /> 
+        <div class="drawer-content flex flex-col">
+            <!-- Navbar -->
+            <div class="w-full navbar bg-petrol text-light-grey">
+                <div class="flex-none lg:hidden">
+                    <label for="my-drawer-3" aria-label="open sidebar" class="btn btn-square btn-ghost">
+                        <i class="fas fa-bars"></i>
+                    </label>
+                </div> 
+                <div class="flex-1 px-2 mx-2">
+                    <a href="{{ url_for('index') }}" class="text-xl font-bold">TeamPulse</a>
+                </div>
+                <div class="flex-none hidden lg:block">
+                    <ul class="menu menu-horizontal">
+                        <li><a href="{{ url_for('index') }}" class="btn btn-ghost text-light-grey normal-case">
+                            <i class="fas fa-home"></i> Home
+                        </a></li>
+                        <li><a href="{{ url_for('list_surveys') }}" class="btn btn-ghost text-light-grey normal-case">
+                            <i class="fas fa-list"></i> Umfragen
+                        </a></li>
+                        <li><a href="{{ url_for('new_survey') }}" class="btn btn-ghost text-light-grey normal-case">
+                            <i class="fas fa-plus"></i> Neue Umfrage
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Flash Messages -->
+            <div class="toast toast-end z-50">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert {{ 'alert-success' if category == 'success' else 'alert-error' }}">
+                                <span>{{ message }}</span>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+            </div>
+            
+            <!-- Main Content -->
+            <main class="flex-grow bg-light-grey min-h-screen">
+                {% block content %}{% endblock %}
+            </main>
+        </div> 
+        
+        <!-- Mobile Drawer -->
+        <div class="drawer-side">
+            <label for="my-drawer-3" aria-label="close sidebar" class="drawer-overlay"></label> 
+            <ul class="menu p-4 w-80 min-h-full bg-petrol text-light-grey">
+                <li><a href="{{ url_for('index') }}" class="btn btn-ghost text-light-grey normal-case justify-start mb-2">
+                    <i class="fas fa-home"></i> Home
+                </a></li>
+                <li><a href="{{ url_for('list_surveys') }}" class="btn btn-ghost text-light-grey normal-case justify-start mb-2">
+                    <i class="fas fa-list"></i> Umfragen
+                </a></li>
+                <li><a href="{{ url_for('new_survey') }}" class="btn btn-ghost text-light-grey normal-case justify-start">
+                    <i class="fas fa-plus"></i> Neue Umfrage
+                </a></li>
+            </ul>
+        </div>
+    </div>
+    
     {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="hero min-h-[30vh] bg-petrol">
+    <div class="hero-content text-center">
+        <div class="max-w-md">
+            <h1 class="text-5xl font-bold mb-4 text-light-grey">{{ survey.title }}</h1>
+            <p class="text-xl mb-6 text-light-grey opacity-80">{{ survey.description }}</p>
+            <div class="flex gap-4 justify-center">
+                <button onclick="showQRCode()" class="btn bg-petrol-60 hover:bg-petrol-80 text-light-grey gap-2 border-none">
+                    <i class="fas fa-qrcode"></i>
+                    QR-Code anzeigen
+                </button>
+                <button onclick="navigator.clipboard.writeText(window.location.href)" 
+                        class="btn bg-accent-yellow hover:bg-accent-yellow/90 text-light-grey-80k gap-2 border-none">
+                    <i class="fas fa-link"></i>
+                    Link kopieren
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container mx-auto px-4 py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Left Column: Question Controls -->
+        <div class="card bg-light-grey shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title mb-4 text-petrol">
+                    <i class="fas fa-question-circle"></i>
+                    Fragen
+                </h2>
+                
+                <div class="flex flex-col gap-4">
+                    {% for question in questions %}
+                    <div class="flex items-center gap-4">
+                        <button onclick="showQuestion('{{ question.id }}')" 
+                                class="btn bg-petrol hover:bg-petrol-20k text-light-grey flex-grow text-left normal-case border-none"
+                                data-question-type="{{ question.type }}">
+                            <span class="badge bg-petrol-60 text-light-grey border-none mr-2">{{ loop.index }}</span>
+                            {{ question.text }}
+                        </button>
+                        <button onclick="toggleQuestion('{{ question.id }}')" 
+                                class="btn btn-circle btn-sm bg-light-grey-20k hover:bg-light-grey-40k border-none" 
+                                title="Frage aktivieren/deaktivieren">
+                            <i class="fas fa-power-off text-petrol"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Results -->
+        <div class="card bg-light-grey shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title mb-4 text-petrol">
+                    <i class="fas fa-chart-bar"></i>
+                    Aktuelle Ergebnisse
+                </h2>
+                
+                <div id="activeQuestion" class="alert bg-petrol-20 text-petrol mb-4" style="display: none;">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Aktive Frage: <span id="activeQuestionText"></span></span>
+                </div>
+
+                <!-- Stats for Choice Questions -->
+                <div id="choiceResults" style="display: none;">
+                    <div class="stats stats-vertical shadow w-full bg-light-grey-20k">
+                        <div class="stat">
+                            <div class="stat-title text-petrol">Teilnehmer</div>
+                            <div class="stat-value text-petrol" id="participantCount">0</div>
+                        </div>
+                        
+                        <div class="stat">
+                            <div class="stat-title text-petrol">Antworten</div>
+                            <div class="stat-value text-petrol" id="answerCount">0</div>
+                            <div class="stat-desc text-petrol-60" id="answerPercentage">0% der Teilnehmer</div>
+                        </div>
+                    </div>
+
+                    <div class="divider text-petrol">Antwortverteilung</div>
+
+                    <div class="w-full">
+                        <div class="flex justify-between mb-2">
+                            <span class="text-accent-green">Ja</span>
+                            <span id="yesPercentage" class="text-accent-green">0%</span>
+                        </div>
+                        <progress class="progress bg-light-grey-20k" id="yesProgress" value="0" max="100" style="--progress: var(--accent-green)"></progress>
+                        
+                        <div class="flex justify-between mb-2 mt-4">
+                            <span class="text-accent-red">Nein</span>
+                            <span id="noPercentage" class="text-accent-red">0%</span>
+                        </div>
+                        <progress class="progress bg-light-grey-20k" id="noProgress" value="0" max="100" style="--progress: var(--accent-red)"></progress>
+                    </div>
+                </div>
+
+                <!-- Text Answers -->
+                <div id="textResults" style="display: none;">
+                    <div class="stats stats-vertical shadow w-full bg-light-grey-20k mb-4">
+                        <div class="stat">
+                            <div class="stat-title text-petrol">Teilnehmer</div>
+                            <div class="stat-value text-petrol" id="textParticipantCount">0</div>
+                        </div>
+                    </div>
+
+                    <div class="divider text-petrol">Antworten</div>
+                    
+                    <div id="textAnswers" class="space-y-4">
+                        <!-- Text answers will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- QR Code Modal -->
+<dialog id="qr-modal" class="modal">
+    <div class="modal-box bg-light-grey">
+        <h3 class="font-bold text-lg mb-4 text-petrol">QR-Code für diese Umfrage</h3>
+        <div class="flex flex-col gap-4">
+            <div class="flex justify-center">
+                <img id="qr-code" src="" alt="QR Code" class="max-w-full bg-white p-4 rounded-lg">
+            </div>
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text text-petrol">Teilnahme-Link:</span>
+                </label>
+                <div class="join w-full">
+                    <input type="text" id="participate-url" readonly class="input input-bordered join-item flex-1 bg-light-grey-20k text-petrol border-petrol">
+                    <button class="btn join-item bg-petrol text-light-grey hover:bg-petrol-20k border-petrol" onclick="copyParticipateUrl()">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-action">
+            <form method="dialog">
+                <button class="btn bg-petrol text-light-grey hover:bg-petrol-20k border-none">Schließen</button>
+            </form>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>Schließen</button>
+    </form>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+const socket = io();
+const surveyId = "{{ survey.uuid }}";
+let currentQuestionId = null;
+let currentQuestionType = null;
+
+// Join survey room
+socket.emit('join', {room: surveyId});
+
+function showQRCode() {
+    // Show loading state
+    const qrImg = document.getElementById('qr-code');
+    qrImg.src = ''; // Clear previous image
+    document.getElementById('qr-modal').showModal();
+    
+    fetch(`/surveys/${surveyId}/qr`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('QR Code data received:', data);
+            if (!data.qr_code) {
+                throw new Error('No QR code in response');
+            }
+            
+            // Create a new image to test loading
+            const tempImg = new Image();
+            tempImg.onload = function() {
+                qrImg.src = data.qr_code;
+            };
+            tempImg.onerror = function() {
+                throw new Error('Failed to load QR code image');
+            };
+            tempImg.src = data.qr_code;
+            
+            document.getElementById('participate-url').value = data.participate_url;
+        })
+        .catch(error => {
+            console.error('Error loading QR code:', error);
+            const toast = document.createElement('div');
+            toast.className = 'alert bg-accent-red text-light-grey';
+            toast.innerHTML = `
+                <i class="fas fa-exclamation-circle"></i>
+                <span>Fehler beim Laden des QR-Codes: ${error.message}</span>
+            `;
+            document.querySelector('.toast').appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        });
+}
+
+function copyParticipateUrl() {
+    const urlInput = document.getElementById('participate-url');
+    urlInput.select();
+    document.execCommand('copy');
+    
+    const toast = document.createElement('div');
+    toast.className = 'alert bg-accent-green text-light-grey';
+    toast.innerHTML = `
+        <i class="fas fa-check"></i>
+        <span>Link wurde kopiert!</span>
+    `;
+    
+    document.querySelector('.toast').appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function showQuestion(questionId) {
+    // Find the question type
+    const questionButton = document.querySelector(`button[onclick="showQuestion('${questionId}')"]`);
+    currentQuestionType = questionButton.dataset.questionType;
+    
+    socket.emit('show_question', {
+        survey_uuid: surveyId,
+        question_id: questionId
+    });
+    
+    currentQuestionId = questionId;
+    updateActiveQuestion(questionId);
+    
+    // Show/hide appropriate results section
+    document.getElementById('choiceResults').style.display = currentQuestionType === 'choice' ? 'block' : 'none';
+    document.getElementById('textResults').style.display = currentQuestionType === 'text' ? 'block' : 'none';
+    
+    // Clear previous results
+    if (currentQuestionType === 'text') {
+        document.getElementById('textAnswers').innerHTML = '';
+        document.getElementById('textParticipantCount').textContent = '0';
+    }
+
+    // Load existing results for this question
+    fetch(`/questions/${questionId}/results`)
+        .then(response => response.json())
+        .then(data => {
+            if (currentQuestionType === 'choice') {
+                updateStats(data);
+            } else {
+                // Load text answers
+                data.answers.forEach(answer => {
+                    const answerDiv = document.createElement('div');
+                    answerDiv.className = 'bg-light-grey-20k p-4 rounded-lg';
+                    answerDiv.innerHTML = `
+                        <p class="text-petrol whitespace-pre-wrap">${answer.text}</p>
+                    `;
+                    document.getElementById('textAnswers').appendChild(answerDiv);
+                });
+                document.getElementById('textParticipantCount').textContent = data.answers.length;
+            }
+        })
+        .catch(error => console.error('Error loading results:', error));
+}
+
+function toggleQuestion(questionId) {
+    // Implementation needed
+    console.log('Toggle question:', questionId);
+}
+
+function updateActiveQuestion(data) {
+    if (data && data.text) {
+        document.getElementById('activeQuestion').style.display = 'flex';
+        document.getElementById('activeQuestionText').textContent = data.text;
+    }
+}
+
+function updateStats(data) {
+    if (currentQuestionType !== 'choice') return;
+    
+    // Update participant count
+    document.getElementById('participantCount').textContent = data.participant_count || '0';
+    
+    // Calculate total responses and percentages
+    const totalResponses = (data.yes_count || 0) + (data.no_count || 0);
+    const yesPercentage = totalResponses > 0 ? Math.round((data.yes_count / totalResponses) * 100) : 0;
+    const noPercentage = totalResponses > 0 ? Math.round((data.no_count / totalResponses) * 100) : 0;
+    
+    // Update answer count and percentage
+    document.getElementById('answerCount').textContent = totalResponses;
+    document.getElementById('answerPercentage').textContent = 
+        `${data.participant_count ? Math.round((totalResponses / data.participant_count) * 100) : 0}% der Teilnehmer`;
+    
+    // Update yes/no percentages and progress bars
+    document.getElementById('yesPercentage').textContent = `${yesPercentage}%`;
+    document.getElementById('noPercentage').textContent = `${noPercentage}%`;
+    document.getElementById('yesProgress').value = yesPercentage;
+    document.getElementById('noProgress').value = noPercentage;
+    
+    console.log('Stats updated:', data);
+}
+
+function handleNewTextAnswer(data) {
+    if (currentQuestionType !== 'text') return;
+    
+    // Update participant count
+    const currentCount = parseInt(document.getElementById('textParticipantCount').textContent);
+    document.getElementById('textParticipantCount').textContent = currentCount + 1;
+    
+    // Add new answer without participant ID
+    const answerDiv = document.createElement('div');
+    answerDiv.className = 'bg-light-grey-20k p-4 rounded-lg';
+    answerDiv.innerHTML = `
+        <p class="text-petrol whitespace-pre-wrap">${data.text}</p>
+    `;
+    document.getElementById('textAnswers').appendChild(answerDiv);
+}
+
+// Socket event handlers
+socket.on('update_stats', updateStats);
+socket.on('update_question', updateActiveQuestion);
+socket.on('new_answer', handleNewTextAnswer);
+</script>
+{% endblock %}

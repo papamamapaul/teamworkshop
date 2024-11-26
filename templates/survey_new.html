@@ -1,29 +1,107 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8">
-    <div class="max-w-2xl mx-auto">
-        <h1 class="text-3xl font-bold mb-8">Neue Umfrage erstellen</h1>
-        
-        <form method="POST" action="/surveys/new" class="space-y-6">
-            <div class="form-control">
-                <label class="label">
-                    <span class="label-text">Titel</span>
-                </label>
-                <input type="text" name="title" class="input input-bordered" required>
-            </div>
-            
-            <div class="form-control">
-                <label class="label">
-                    <span class="label-text">Beschreibung</span>
-                </label>
-                <textarea name="description" class="textarea textarea-bordered h-24"></textarea>
-            </div>
-            
-            <div class="form-control mt-6">
-                <button type="submit" class="btn btn-primary">Umfrage erstellen</button>
-            </div>
-        </form>
+<div class="hero min-h-[30vh] bg-primary text-primary-content">
+    <div class="hero-content text-center">
+        <div class="max-w-md">
+            <h1 class="text-5xl font-bold mb-4">Neue Umfrage</h1>
+            <p class="text-xl">Erstellen Sie eine neue Umfrage für Ihr Team</p>
+        </div>
     </div>
 </div>
+
+<div class="container mx-auto px-4 py-8">
+    <div class="card bg-base-100 shadow-xl max-w-3xl mx-auto">
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('new_survey') }}" id="surveyForm">
+                <div class="form-control mb-6">
+                    <label class="label">
+                        <span class="label-text text-lg">Titel der Umfrage</span>
+                    </label>
+                    <input type="text" name="title" class="input input-bordered" required>
+                </div>
+                
+                <div class="form-control mb-6">
+                    <label class="label">
+                        <span class="label-text text-lg">Beschreibung</span>
+                    </label>
+                    <textarea name="description" class="textarea textarea-bordered h-24"></textarea>
+                </div>
+                
+                <div class="divider">Fragen</div>
+                
+                <div id="questions-container">
+                    <div class="question-group mb-6">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="label-text text-lg">Frage 1</label>
+                            <button type="button" class="btn btn-error btn-sm gap-2 remove-question" style="display: none;">
+                                <i class="fas fa-trash"></i> Löschen
+                            </button>
+                        </div>
+                        <input type="text" name="questions[]" class="input input-bordered w-full" required>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between items-center mt-8">
+                    <button type="button" id="add-question" class="btn btn-secondary gap-2">
+                        <i class="fas fa-plus"></i> Weitere Frage
+                    </button>
+                    <button type="submit" class="btn btn-primary gap-2">
+                        <i class="fas fa-check"></i> Umfrage erstellen
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('questions-container');
+    const addButton = document.getElementById('add-question');
+    let questionCount = 1;
+
+    addButton.addEventListener('click', function() {
+        questionCount++;
+        const questionGroup = document.createElement('div');
+        questionGroup.className = 'question-group mb-6';
+        questionGroup.innerHTML = `
+            <div class="flex justify-between items-center mb-2">
+                <label class="label-text text-lg">Frage ${questionCount}</label>
+                <button type="button" class="btn btn-error btn-sm gap-2 remove-question">
+                    <i class="fas fa-trash"></i> Löschen
+                </button>
+            </div>
+            <input type="text" name="questions[]" class="input input-bordered w-full" required>
+        `;
+        container.appendChild(questionGroup);
+
+        if (questionCount > 1) {
+            document.querySelectorAll('.remove-question').forEach(btn => {
+                btn.style.display = 'block';
+            });
+        }
+    });
+
+    container.addEventListener('click', function(e) {
+        if (e.target.closest('.remove-question')) {
+            const questionGroup = e.target.closest('.question-group');
+            questionGroup.remove();
+            questionCount--;
+
+            if (questionCount === 1) {
+                document.querySelectorAll('.remove-question').forEach(btn => {
+                    btn.style.display = 'none';
+                });
+            }
+
+            document.querySelectorAll('.question-group').forEach((group, index) => {
+                group.querySelector('label').textContent = `Frage ${index + 1}`;
+            });
+        }
+    });
+});
+</script>
 {% endblock %}

@@ -1,27 +1,40 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="space-y-8">
-    <div class="card bg-base-100 shadow-xl">
-        <div class="card-body">
-            <h2 class="card-title">Neue Frage stellen</h2>
-            <form id="participantQuestionForm" class="space-y-4">
-                <div class="form-control">
-                    <label class="label">
-                        <span class="label-text">Ihre Frage</span>
-                    </label>
-                    <input type="text" id="participantQuestionText" class="input input-bordered" required>
-                </div>
-                <button type="submit" class="btn btn-primary">Frage einreichen</button>
-            </form>
+<div class="hero min-h-[30vh] bg-primary text-primary-content">
+    <div class="hero-content text-center">
+        <div class="max-w-md">
+            <h1 class="text-5xl font-bold mb-4">{{ survey.title }}</h1>
+            <p class="text-xl">{{ survey.description }}</p>
         </div>
     </div>
+</div>
 
-    <div class="card bg-base-100 shadow-xl">
+<div class="container mx-auto px-4 py-8">
+    <div class="card bg-base-100 shadow-xl max-w-3xl mx-auto">
         <div class="card-body">
-            <h2 class="card-title">Aktuelle Fragen</h2>
-            <div id="activeQuestions" class="space-y-4">
-                <!-- Aktive Fragen werden hier dynamisch eingefügt -->
+            <div id="question-container" class="mb-8">
+                <div class="text-center mb-8">
+                    <div class="text-2xl font-bold mb-2" id="current-question"></div>
+                    <div class="badge badge-primary" id="question-counter"></div>
+                </div>
+
+                <div class="flex justify-center gap-4">
+                    <button class="btn btn-primary btn-lg gap-2" onclick="submitYes()">
+                        <i class="fas fa-check"></i> Ja
+                    </button>
+                    <button class="btn btn-error btn-lg gap-2" onclick="submitNo()">
+                        <i class="fas fa-times"></i> Nein
+                    </button>
+                </div>
+            </div>
+
+            <div id="completion-message" class="text-center" style="display: none;">
+                <div class="text-2xl font-bold mb-4">Vielen Dank für Ihre Teilnahme!</div>
+                <p class="mb-6">Ihre Antworten wurden erfolgreich gespeichert.</p>
+                <a href="{{ url_for('index') }}" class="btn btn-primary gap-2">
+                    <i class="fas fa-home"></i> Zurück zur Startseite
+                </a>
             </div>
         </div>
     </div>
@@ -29,5 +42,56 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/participate.js') }}"></script>
+<script>
+let currentQuestionIndex = 0;
+const questions = {{ questions|tojson|safe }};
+const surveyId = "{{ survey.id }}";
+
+function updateQuestion() {
+    if (currentQuestionIndex < questions.length) {
+        document.getElementById('current-question').textContent = questions[currentQuestionIndex];
+        document.getElementById('question-counter').textContent = 
+            `Frage ${currentQuestionIndex + 1} von ${questions.length}`;
+    } else {
+        document.getElementById('question-container').style.display = 'none';
+        document.getElementById('completion-message').style.display = 'block';
+    }
+}
+
+async function submitAnswer(answer) {
+    try {
+        const response = await fetch('/submit_answer', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                survey_id: surveyId,
+                question_index: currentQuestionIndex,
+                answer: answer
+            })
+        });
+
+        if (response.ok) {
+            currentQuestionIndex++;
+            updateQuestion();
+        } else {
+            console.error('Failed to submit answer');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+function submitYes() {
+    submitAnswer(true);
+}
+
+function submitNo() {
+    submitAnswer(false);
+}
+
+// Initialize first question
+updateQuestion();
+</script>
 {% endblock %}
